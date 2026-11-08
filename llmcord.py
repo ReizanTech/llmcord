@@ -3,7 +3,7 @@ from base64 import b64encode
 from dataclasses import dataclass, field
 from datetime import datetime
 import logging
-import os
+from pathlib import Path
 from typing import Any, Literal, Optional
 
 import discord
@@ -13,7 +13,8 @@ from discord.ui import LayoutView, TextDisplay
 from dotenv import load_dotenv
 import httpx
 from openai import AsyncOpenAI
-import yaml
+
+from rag import KnowledgeBase, RagSettings, format_context, get_config
 
 load_dotenv()
 
@@ -33,22 +34,13 @@ EDIT_DELAY_SECONDS = 1
 MAX_MESSAGE_NODES = 500
 
 
-def resolve_env(node: Any) -> Any:
-    if isinstance(node, dict):
-        return {key.removesuffix("_env"): os.environ.get(value) if key.endswith("_env") else resolve_env(value) for key, value in node.items()}
-    return node
-
-
-def get_config(filename: str = "config.yaml") -> dict[str, Any]:
-    with open(filename, encoding="utf-8") as file:
-        return resolve_env(yaml.safe_load(file))
-
-
 config = get_config()
 curr_model = next(iter(config["models"]))
 
 msg_nodes = {}
 last_task_time = 0
+
+knowledge_base: Optional[KnowledgeBase] = None
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -103,12 +95,55 @@ async def model_autocomplete(interaction: discord.Interaction, curr_str: str) ->
     return choices[:25]
 
 
+@discord_bot.tree.command(name="kb", description="Check or reload the support knowledge base")
+async def kb_command(interaction: discord.Interaction, reload: bool = False) -> None:
+    if interaction.user.id not in config["permissions"]["users"]["admin_ids"]:
+        await interaction.response.send_message("You don't have permission to manage the knowledge base.", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True)
+
+    if reload:
+        await load_knowledge_base()
+
+    if knowledge_base is None:
+        await interaction.followup.send("Knowledge base is disabled (`rag.enabled: false`).", ephemeral=True)
+    elif not knowledge_base.available:
+        await interaction.followup.send(f"Knowledge base unavailable: {knowledge_base.unavailable_reason}", ephemeral=True)
+    else:
+        settings = knowledge_base.settings
+        await interaction.followup.send(
+            f"Knowledge base ready.\nFolder: `{settings.knowledge_dir.name}` · model: `{settings.embed_model}` · top-k: {settings.top_k}",
+            ephemeral=True,
+        )
+
+
 @discord_bot.event
 async def on_ready() -> None:
+    global knowledge_base
+
     if client_id := config.get("client_id"):
         logging.info(f"\n\nBOT INVITE URL:\nhttps://discord.com/oauth2/authorize?client_id={client_id}&permissions=412317191168&scope=bot\n")
 
+    await load_knowledge_base()
     await discord_bot.tree.sync()
+
+
+async def load_knowledge_base() -> None:
+    """Load (or reload) the knowledge base without blocking the event loop."""
+    global knowledge_base
+
+    settings = RagSettings.from_config(config, Path(__file__).resolve().parent)
+    if settings is None:
+        knowledge_base = None
+        logging.info("Knowledge base disabled (rag.enabled is false)")
+        return
+
+    knowledge_base = await asyncio.to_thread(KnowledgeBase.load, settings)
+    if knowledge_base.available:
+        logging.info(f"Knowledge base ready: {settings.knowledge_dir}")
+    else:
+        logging.warning(f"Knowledge base unavailable ({knowledge_base.unavailable_reason}) — replies will have no context")
 
 
 @discord_bot.event
@@ -247,10 +282,34 @@ async def on_message(new_msg: discord.Message) -> None:
 
     logging.info(f"Message received (user ID: {new_msg.author.id}, attachments: {len(new_msg.attachments)}, conversation length: {len(messages)}):\n{new_msg.content}")
 
+    # Retrieve from the knowledge base before building the system prompt.
+    # Retrieval is blocking HTTP, so it runs in a worker thread.
+    sources = []
+    if knowledge_base and knowledge_base.available:
+        question = new_msg.content.removeprefix(discord_bot.user.mention).strip()
+        if question:
+            try:
+                sources = await asyncio.to_thread(knowledge_base.retrieve, question)
+                logging.info(f"Retrieved {len(sources)} passage(s) for: {question[:80]}")
+            except Exception:
+                # A retrieval failure must not cost the user their reply.
+                logging.exception("Knowledge base retrieval failed")
+                user_warnings.add("⚠️ Knowledge base search failed")
+
     if system_prompt := config.get("system_prompt"):
         now = datetime.now().astimezone()
 
         system_prompt = system_prompt.replace("{date}", now.strftime("%B %d %Y")).replace("{time}", now.strftime("%H:%M:%S %Z%z")).strip()
+
+        if sources:
+            context = format_context(sources, knowledge_base.settings.max_context_chars)
+            system_prompt += (
+                "\n\n# Knowledge Base\n"
+                "The passages below were retrieved from the support knowledge base. "
+                "Base your answer on them, and cite them as [1], [2] where relevant. "
+                "If they do not cover the question, say so instead of guessing.\n\n"
+                f"{context}"
+            )
 
         messages.append(dict(role="system", content=system_prompt))
 
@@ -341,7 +400,8 @@ async def main() -> None:
     await discord_bot.start(config["bot_token"])
 
 
-try:
-    asyncio.run(main())
-except KeyboardInterrupt:
-    pass
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass

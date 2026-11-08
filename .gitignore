@@ -11,3 +11,16 @@
 !config.yaml
 !docker-compose.yaml
 !requirements.txt
+
+# RAG support package and its index builder
+!rag/
+!rag/*.py
+!build_knowledge_index.py
+
+# Support knowledge base (.md files the bot retrieves from)
+!knowledge_base/
+!knowledge_base/*.md
+
+# tests
+!tests/
+!tests/*.py
