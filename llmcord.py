@@ -307,7 +307,14 @@ async def on_message(new_msg: discord.Message) -> None:
                 "\n\n# Knowledge Base\n"
                 "The passages below were retrieved from the support knowledge base. "
                 "Base your answer on them, and cite them as [1], [2] where relevant. "
-                "If they do not cover the question, say so instead of guessing.\n\n"
+                "If they do not cover the question, say so instead of guessing.\n"
+                "- When the question contains a warning or error code (e.g. W086, E101), "
+                "answer from the passage that matches that exact code.\n"
+                "- Include the relevant links/URLs from the passages exactly as written, "
+                "including every download page. Copy the full https:// address; never "
+                "replace a link with a description like 'the GitHub page'.\n"
+                "- Include every applicable step and branch (for example Windows 7 vs "
+                "Windows 10/11). Completeness of the procedure matters more than brevity.\n\n"
                 f"{context}"
             )
 
