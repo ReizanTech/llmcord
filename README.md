@@ -126,6 +126,7 @@ Admins can check the status or reload the index at runtime with `/kb` (add `relo
    **No Docker:**
    ```bash
    python -m pip install -U -r requirements.txt
+   python build_knowledge_index.py   # first run, and after editing the knowledge base
    python llmcord.py
    ```
 
@@ -133,6 +134,13 @@ Admins can check the status or reload the index at runtime with `/kb` (add `relo
    ```bash
    docker compose up
    ```
+
+## Documentation
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how a message becomes a reply, component map, degradation paths
+- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — every setting, defaults, and what hot-reloads
+- [docs/KNOWLEDGE_BASE.md](docs/KNOWLEDGE_BASE.md) — chunking, retrieval, and maintaining the index
+- [docs/OPERATIONS.md](docs/OPERATIONS.md) — install, run, Docker, tests, troubleshooting
 
 ## Notes
 

@@ -21,6 +21,10 @@
 !knowledge_base/
 !knowledge_base/*.md
 
+# documentation
+!docs/
+!docs/*.md
+
 # tests
 !tests/
 !tests/*.py

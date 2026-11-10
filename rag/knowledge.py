@@ -25,7 +25,9 @@ class Source:
 
     @property
     def label(self) -> str:
-        header = self.header_path.strip("/ ")
+        # Markdown headings can carry a trailing CR (files with CRLF line
+        # endings), which would otherwise leak into the prompt.
+        header = self.header_path.strip().strip("/").strip()
         return f"{self.file_name} › {header}" if header else self.file_name
 
 

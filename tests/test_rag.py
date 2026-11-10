@@ -74,6 +74,22 @@ def test_retrieval_returns_text_after_reload(settings):
     assert sources[0].file_name == "guide.md"
 
 
+def test_second_build_updates_incrementally(settings):
+    """Regression: the completeness check looked for the wrong vector-store name."""
+    build(settings)
+
+    from build_knowledge_index import index_documents, load_documents
+
+    # Unchanged input must be a no-op, not a full re-embed.
+    added = index_documents(
+        load_documents(settings.knowledge_dir),
+        settings,
+        embed_model=Settings.embed_model,
+    )
+
+    assert added == 0
+
+
 def test_incomplete_storage_folder_is_rebuilt_instead_of_crashing(settings):
     """Regression: an empty storage folder crashed on the missing docstore.json."""
     settings.storage_dir.mkdir()
@@ -150,6 +166,13 @@ def test_context_includes_every_passage_when_it_fits():
 
     assert "[1] (a.md)" in context
     assert "[2] (b.md)" in context
+
+
+def test_label_strips_trailing_carriage_return():
+    """Markdown headings from CRLF files carry a trailing \\r into the prompt."""
+    source = Source(file_name="a.md", header_path="/Section\r/", text="x")
+
+    assert source.label == "a.md › Section"
 
 
 def test_empty_sources_produce_no_context():
