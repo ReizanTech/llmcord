@@ -58,16 +58,22 @@ def index_documents(documents, settings: RagSettings, embed_model=None) -> int:
     Settings.embed_model = embed_model or make_embed_model(settings, batch_size=16)
 
     storage_dir = settings.storage_dir
-    if storage_dir.exists():
+    # A persisted index needs all three stores. A folder left behind by an
+    # interrupted or partial build would otherwise crash the loader.
+    required = ("docstore.json", "vector_store.json", "index_store.json")
+    has_index = storage_dir.exists() and all((storage_dir / name).exists() for name in required)
+    if has_index:
         docstore = SimpleDocumentStore.from_persist_dir(str(storage_dir))
         vector_store = SimpleVectorStore.from_persist_dir(str(storage_dir))
         print("existing index found — updating incrementally")
     else:
+        if storage_dir.exists():
+            print("storage folder is incomplete — starting a fresh index")
         docstore = SimpleDocumentStore()
         vector_store = SimpleVectorStore()
 
     storage_context = StorageContext.from_defaults(
-        persist_dir=str(storage_dir) if storage_dir.exists() else None,
+        persist_dir=str(storage_dir) if has_index else None,
         docstore=docstore,
         vector_store=vector_store,
     )

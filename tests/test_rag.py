@@ -74,6 +74,18 @@ def test_retrieval_returns_text_after_reload(settings):
     assert sources[0].file_name == "guide.md"
 
 
+def test_incomplete_storage_folder_is_rebuilt_instead_of_crashing(settings):
+    """Regression: an empty storage folder crashed on the missing docstore.json."""
+    settings.storage_dir.mkdir()
+    (settings.storage_dir / "leftover.txt").write_text("partial build", encoding="utf-8")
+
+    build(settings)
+
+    assert (settings.storage_dir / "docstore.json").exists()
+    kb = KnowledgeBase.load(settings, embed_model=Settings.embed_model)
+    assert kb.retrieve("antivirus")
+
+
 def test_off_topic_question_yields_no_passages(settings):
     """A weak match must be dropped, not injected as misleading context."""
     build(settings)
