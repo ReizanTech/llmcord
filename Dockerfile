@@ -8,6 +8,8 @@ COPY requirements.txt ./
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY llmcord.py config.yaml ./
+COPY llmcord.py config.yaml build_knowledge_index.py ./
+COPY rag ./rag
+COPY knowledge_base ./knowledge_base
 
 CMD ["python", "llmcord.py"]

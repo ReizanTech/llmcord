@@ -95,6 +95,32 @@ Or run local models with:
 | **models** | Add the models you want to use in `<provider>/<model>: <parameters>` format (examples are included). When you run `/model` these models will show up as autocomplete suggestions.<br /><br />**Refer to each provider's documentation for supported parameters.**<br /><br />**The first model in your `models` list will be the default model at startup.**<br /><br />**Some vision models may need `:vision` added to the end of their name to enable image support.** |
 | **system_prompt** | Write anything you want to customize the bot's behavior!<br /><br />**Leave blank for no system prompt.**<br /><br />**You can use the `{date}` and `{time}` tags in your system prompt to insert the current date and time, based on your host computer's time zone.**<br /><br />**It is recommended to include something like `"User messages are prefixed with their Discord ID as <@ID>. Use this format to mention users."` in your system prompt to help the bot understand the user message format.** |
 
+### Knowledge base (RAG):
+
+The bot can answer from a folder of Markdown files instead of relying on the model's memory. When a message arrives, the closest passages are retrieved and added to the system prompt, numbered so the model can cite `[1]`, `[2]`.
+
+| Setting | Description |
+| --- | --- |
+| **rag.enabled** | Set to `false` to turn retrieval off.<br /><br />Default: `true` |
+| **rag.provider** | Name of an entry under `providers` used for embeddings, so the API key is not duplicated.<br /><br />Default: `sovereign` |
+| **rag.knowledge_dir** | Folder scanned recursively for `.md` files.<br /><br />Default: `knowledge_base` |
+| **rag.storage_dir** | Where the index is persisted.<br /><br />Default: `storage` |
+| **rag.embed_model** | Embedding model name.<br /><br />Default: `qwen3-embedding-8b` |
+| **rag.embed_dim** | Embedding dimension; the builder refuses to save an index whose dimension differs.<br /><br />Default: `4096` |
+| **rag.chunk_size** / **rag.chunk_overlap** | Chunking of the Markdown, in characters.<br /><br />Defaults: `800` / `120` |
+| **rag.top_k** | Passages retrieved per message.<br /><br />Default: `5` |
+| **rag.max_context_chars** | Upper bound on retrieved text added to the system prompt.<br /><br />Default: `6000` |
+| **rag.min_score** | Passages below this similarity are dropped, so off-topic questions get no context.<br /><br />Default: `0.45` |
+
+Build the index before starting the bot, and again after editing the knowledge base:
+
+```bash
+python build_knowledge_index.py            # add/update changed files
+python build_knowledge_index.py --rebuild  # rebuild from scratch
+```
+
+Admins can check the status or reload the index at runtime with `/kb` (add `reload: true` to reload).
+
 3. Run the bot:
 
    **No Docker:**
